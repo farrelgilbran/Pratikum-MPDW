@@ -1,0 +1,181 @@
+---
+title: "Tugas MPDW 1"
+author: "Farrel Gilbran"
+output: html_document
+---
+
+```{r}
+# Memanggil Library
+library("zoo")
+library("forecast")
+library("ggplot2")
+library("rio")
+library("TTR")
+library("TSA")
+library("readxl")
+```
+
+```{r}
+# Membaca Data Excel
+data <- read_excel("Bitcoin Highest Stock Market Price 2022-2023 xlsx.xlsx")
+
+# Mengonversi kolom 'Date' menjadi tipe data Date jika belum
+data$Date <- as.Date(data$Date)
+
+# Memfilter data hanya untuk rentang 1 Juli 2022 hingga 1 Juli 2023
+data <- subset(data, Date >= as.Date("2022-07-01") & Date <= as.Date("2023-06-30"))
+
+#Cek data
+str(data)
+```
+
+```{r}
+#Data time series
+data.ts <- ts(data$High)
+summary(data.ts)
+```
+
+```{r}
+# Mengecek missing value
+sum(is.na(data))
+```
+
+```{r}
+#Membagi data training dan data test
+train<-data[1:292,]
+test<-data[293:365,]
+train.ts<-ts(train$High)
+test.ts<-ts(test$High)
+
+```
+
+
+```{r}
+#Eksplorasi plot data
+ts.plot(data.ts, main = "Bitcoin Highest Stock Market Price 2022-2023", ylab = "Price",xlab="Time Period" , lwd = 1.5)
+
+```
+
+##Single Moving Average (SMA)
+#Pemulusan SMA dengan n=4
+```{r}
+data.sma<-SMA(train.ts, n=4)
+data.sma
+```
+
+```{r}
+data.ramal<-c(NA,data.sma)
+data.ramal #forecast 1 periode ke depan
+
+```
+
+```{r}
+data.gab<-cbind(aktual=c(train.ts,rep(NA,73)),pemulusan=c(data.sma,rep(NA,73)),ramalan=c(data.ramal,rep(data.ramal[length(data.ramal)],72)))
+data.gab #forecast 73 periode ke depan
+
+```
+
+```{r}
+#Plot deret waktu dari hasil peramalan
+ts.plot(data.gab[,1], xlab="Time Period ", ylab="Price", main= "Bitcoin Highest Stock Market Price 2022-2023 with SMA N=4")
+points(data.gab[,1])
+lines(data.gab[,2],col="green",lwd=2)
+lines(data.gab[,3],col="red",lwd=2)
+legend("topleft",c("data aktual","data pemulusan","data peramalan"), lty=8, col=c("black","green","red"), cex=0.6)
+
+```
+
+#Menghitung akurasi dengan ukuran akurasi *Sum Squares Error* (SSE), *Mean Square Error* (MSE) dan *Mean Absolute Percentage Error* (MAPE). Perhitungan akurasi dilakukan pada data latih dan data uji.
+```{r}
+#Menghitung nilai keakuratan data latih
+error.train.sma = train.ts-data.ramal[1:length(train.ts)]
+SSE.train.sma = sum(error.train.sma[13:length(train.ts)]^2)
+MSE.train.sma = mean(error.train.sma[13:length(train.ts)]^2)
+MAPE.train.sma = mean(abs((error.train.sma[13:length(train.ts)]/train.ts[13:length(train.ts)])*100))
+
+akurasi.train.sma <- matrix(c(SSE.train.sma, MSE.train.sma, MAPE.train.sma))
+row.names(akurasi.train.sma)<- c("SSE", "MSE", "MAPE")
+colnames(akurasi.train.sma) <- c("Akurasi m = 4")
+akurasi.train.sma
+
+```
+#Nilai MAPE yang kurang dari 10% sehingga nilai akurasi ini dikategorikan sangat baik
+
+
+```{r}
+#Menghitung nilai keakuratan data uji
+error.test.sma = test.ts-data.gab[293:365,3]
+SSE.test.sma = sum(error.test.sma^2)
+MSE.test.sma = mean(error.test.sma^2)
+MAPE.test.sma = mean(abs((error.test.sma/test.ts*100)))
+
+akurasi.test.sma <- matrix(c(SSE.test.sma, MSE.test.sma, MAPE.test.sma))
+row.names(akurasi.test.sma)<- c("SSE", "MSE", "MAPE")
+colnames(akurasi.test.sma) <- c("Akurasi m = 12")
+akurasi.test.sma
+
+```
+#Nilai MAPE yang kurang dari 10% sehingga nilai akurasi ini dikategorikan sangat baik
+
+
+###Double Moving Average (DMA)
+#Pemulusan DMA dengan n=4
+```{r}
+dma <- SMA(data.sma, n = 4)
+At <- 2*data.sma - dma
+Bt <- 2/(3-1)*(data.sma - dma)
+data.dma<- At+Bt
+data.ramal2<- c(NA, data.dma)
+
+t = 1:73
+f = c()
+
+for (i in t) {
+  f[i] = At[length(At)] + Bt[length(Bt)]*(i)
+}
+
+data.gab2 <- cbind(aktual = c(train.ts,rep(NA,73)), pemulusan1 = c(data.sma,rep(NA,73)),pemulusan2 = c(data.dma, rep(NA,73)),At = c(At, rep(NA,73)), Bt = c(Bt,rep(NA,73)),ramalan = c(data.ramal2, f[-1]))
+data.gab2
+
+```
+
+```{r}
+#Visualisasi hasil pemulusan
+ts.plot(data.gab2[,1], xlab="Time Period ", ylab="Price", main= "Bitcoin Highest Stock Market Price 2022-2023 with DMA N=4")
+points(data.gab2[,1])
+lines(data.gab2[,3],col="green",lwd=2)
+lines(data.gab2[,6],col="red",lwd=2)
+legend("topleft",c("data aktual","data pemulusan","data peramalan"), lty=8, col=c("black","green","red"), cex=0.6)
+
+```
+
+```{r}
+#Menghitung nilai keakuratan data latih
+error.train.dma = train.ts-data.ramal2[1:length(train.ts)]
+SSE.train.dma = sum(error.train.dma[8:length(train.ts)]^2)
+MSE.train.dma = mean(error.train.dma[8:length(train.ts)]^2)
+MAPE.train.dma = mean(abs((error.train.dma[8:length(train.ts)]/train.ts[8:length(train.ts)])*100))
+
+akurasi.train.dma <- matrix(c(SSE.train.dma, MSE.train.dma, MAPE.train.dma))
+row.names(akurasi.train.dma)<- c("SSE", "MSE", "MAPE")
+colnames(akurasi.train.dma) <- c("Akurasi m = 4")
+akurasi.train.dma
+
+```
+#Nilai MAPE yang kurang dari 10% sehingga nilai akurasi ini dikategorikan sangat baik
+
+```{r}
+#Menghitung nilai keakuratan data uji
+error.test.dma = test.ts-data.gab2[293:365,6]
+SSE.test.dma = sum(error.test.dma^2)
+MSE.test.dma = mean(error.test.dma^2)
+MAPE.test.dma = mean(abs((error.test.dma/test.ts*100)))
+
+akurasi.test.dma <- matrix(c(SSE.test.dma, MSE.test.dma, MAPE.test.dma))
+row.names(akurasi.test.dma)<- c("SSE", "MSE", "MAPE")
+colnames(akurasi.test.dma) <- c("Akurasi m = 4")
+akurasi.test.dma
+```
+#Nilai MAPE yang kurang dari 10% sehingga nilai akurasi ini dikategorikan sangat baik
+
+#Dapat kita lihat bahwa baik pada data latih maupun data uji, metode SMA lebih baik dibandingkan dengan metode DMA. Oleh karena itu, dapat dikatakan bahwa data trend seperti ini lebih cocok menggunakan metode SMA.
