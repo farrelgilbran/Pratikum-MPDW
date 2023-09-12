@@ -1,0 +1,208 @@
+---
+title: "Tugas 2 MPDW"
+author: "Farrel Gilbran"
+date: "2023-09-10"
+output: html_document
+---
+
+#Panggil Package
+
+```{r}
+library(dplyr)
+library(knitr)
+library(TTR)
+library(lmtest) #digunakan untuk uji formal pendeteksian autokorelasi
+library(orcutt) #untuk membuat model regresi Cochrane-Orcutt
+library(HoRM) #untuk membuat model regresi Hildreth-Lu
+```
+
+#Input Data
+
+```{r}
+library(readxl)
+datap2 <- read_excel("C:/Users/farre/Downloads/data prak 2.xlsx")
+Periode=datap2$Periode
+O3=datap2$o3
+AQI=datap2$AQI
+View(datap2)
+str(datap2)
+```
+
+#Membentuk objek time series
+
+```{r}
+data.ts1<-ts(datap2$AQI)
+data.ts1
+```
+
+```{r}
+data.ts2<-ts(datap2$o3)
+data.ts2
+```
+
+#Eksplorasi Data
+##Membuat plot time series
+
+```{r}
+ts.plot(data.ts1, xlab="Time Period ", ylab="AQI", main= "Time Series Plot of AQI")
+points(data.ts1)
+```
+
+#Menampilkan Nilai Korelasi
+
+```{r}
+cor(Periode,AQI)
+```
+
+#Membuat plot time series
+
+```{r}
+ts.plot(data.ts2, xlab="Time Period ", ylab="O3", main= "Time Series Plot of O3")
+points(data.ts2)
+```
+
+#Menampilkan Nilai Korelasi
+
+```{r}
+cor(Periode,O3)
+```
+
+# Regresi
+##Pembuatan Model Regresi
+
+```{r}
+model<- lm(AQI ~ Periode + o3 , data = datap2)
+summary(model)
+```
+
+#Pemeriksaan Asumsi Autokorelasi
+##Uji Eksploratif
+
+```{r}
+residual <- residuals(model)
+
+plot(residual, type="o", 
+     ylab = "Sisaan", xlab = "Order", main = "Sisaan vs Order")
+abline(h = 0, col='red')
+```
+Terlihat plot Sisaan vs Order mengalami pola naik turun yang mengindikasikan keberadaan autokorelasi. 
+
+##Uji ACF dan PACF
+
+```{r}
+acf(residual)
+```
+
+
+```{r}
+pacf(residual)
+```
+Pada Plot ACF dan PACF, terdapat garis vertikal pada paubah Lag yang melebihi garis horizontal berwarna biru. Artinya,terindikasi terdapat autokorelasi dalam model. 
+
+##Uji Formal: Durbin Watson
+
+H0: Tidak ada autokorelasi
+H1: Ada autokorelasi
+```{r}
+lmtest::dwtest(model, alternative = 'two.sided')
+```
+p-value < 0.05. Maka, Tolak H0. Hasil ini menunjukkan bahwa terdapat bukti yang sangat kuat untuk menolak hipotesis nol yang menyatakan bahwa tidak ada autokorelasi pada data. Artinya, terdapat autokorelasi yang signifikan dalam model atau data yang diuji.
+
+#Penanganan Autokorelasi
+##Metode Cochrane-Orcutt
+
+```{r}
+#Penanganan Autokorelasi Cochrane-Orcutt
+modelCO<-cochrane.orcutt(model)
+modelCO
+```
+Setelah menggunakan metode Cochrane-Orcutt untuk mengatasi autokorelasi orde pertama, terjadi peningkatan nilai Durbin-Watson dari 0.26506 menjadi 1.27372; meskipun terdapat perbaikan, nilai Durbin-Watson yang diubah masih menunjukkan kemungkinan adanya autokorelasi dalam data.
+```{r}
+#Rho optimum
+rho<- modelCO$rho
+rho
+```
+
+```{r}
+#Transformasi Manual
+Y.trans<- datap2$AQI[-1]-datap2$AQI[-72]*rho
+X1.trans<- datap2$Periode[-1]-datap2$Periode[-72]*rho
+X2.trans<- datap2$o3[-1]-datap2$o3[-72]*rho
+
+
+modelCOmanual<- lm(Y.trans ~ X1.trans + X2.trans)
+summary(modelCOmanual)
+```
+```{r}
+lmtest::dwtest(modelCO, alternative = 'two.sided')
+```
+Hasil uji Durbin-Watson (DW) adalah 1.2737, dengan nilai p sebesar 0.0006453. Hasil ini menunjukkan bahwa terdapat bukti yang cukup kuat untuk menolak hipotesis nol yang menyatakan bahwa tidak ada autokorelasi pada data. Artinya, terdapat autokorelasi yang signifikan dalam model atau data yang diuji.
+
+##Metode Hildreth-Lu
+
+```{r}
+#Penanganan Autokorelasi Hildreth lu
+# Hildreth-Lu
+hildreth.lu.func.multi<- function(r, model){
+  x <- model.matrix(model)[,-1]
+  y <- model.response(model.frame(model))
+  n <- length(y)
+  t <- 2:n
+  y <- y[t]-r*y[t-1]
+  
+  # Modifikasi untuk beberapa variabel bebas
+  x1 <- x[,1][t]-r*x[,1][t-1]
+  x2 <- x[,2][t]-r*x[,2][t-1]
+  
+  
+  return(lm(y~x1+x2))
+}
+
+# Pencarian rho yang meminimumkan SSE
+r <- c(seq(0.1,0.9, by= 0.1))
+tab <- data.frame("rho" = r, "SSE" = sapply(r, function(i){deviance(hildreth.lu.func.multi(i, model))}))
+round(tab, 4)
+
+```
+Berdasarkan iterasi rho dari rentang 0.1 sampai 0.9 dengan looping sebesar 0.1 didapatkan rho teroptimum adalah rho = 0.6 dengan SSE terkecil. Supaya rho yang didapatkan lebih teliti selanjutnya dilakukan iterasi kembali dari 0.5 sampai 0.7 dengan looping sebesar 0.001
+
+```{r}
+#Rho optimal di sekitar 0.6
+rOpt <- seq(0.5,0.7, by= 0.00001)
+tabOpt <- data.frame("rho" = rOpt, "SSE" = sapply(rOpt, function(i){deviance(hildreth.lu.func.multi(i, model))}))
+head(tabOpt[order(tabOpt$SSE),])
+
+#Grafik SSE optimum
+par(mfrow = c(1,1))
+plot(tab$SSE ~ tab$rho , type = "l", xlab = "Rho", ylab = "SSE")
+abline(v = tabOpt[tabOpt$SSE==min(tabOpt$SSE),"rho"], lty = 2, col="red",lwd=2)
+```
+```{r}
+#Model terbaik
+modelHL <- hildreth.lu.func.multi(0, model)
+summary(modelHL)
+```
+
+```{r}
+#Deteksi autokorelasi
+dwtest(modelHL, , alternative = 'two.sided')
+```
+Dilakukan uji autokorelasi menghasilkan hasil yang sama, tidak mengatasi masalah autokorelasi.
+
+```{r}
+#Perbandingan
+sseModelawal <- anova(model)$`Sum Sq`[-(1:2)]
+sseModelCO <- anova(modelCOmanual)$`Sum Sq`[-(1:2)]
+sseModelHL <- anova(modelHL)$`Sum Sq`[-(1:2)]
+mseModelawal <- sseModelawal/length(datap2$AQI)
+mseModelCO <- sseModelCO/length(datap2$AQI)
+mseModelHL <- sseModelHL/length(datap2$AQI)
+akurasi <- matrix(c(sseModelawal,sseModelCO,sseModelHL,
+                    mseModelawal,mseModelCO,mseModelHL),nrow=2,ncol=3,byrow = T)
+colnames(akurasi) <- c("Model Awal", "Model Cochrane-Orcutt", "Model Hildreth-Lu")
+row.names(akurasi) <- c("SSE","MSE")
+akurasi
+kable(akurasi)
+```
+Dapat kita lihat pada hasil diatas, pada metode Cochrane-Orcutt lah yang memiliki SEE yg paling kecil dibandingkan OLS dan Hildreth-Lu
+
