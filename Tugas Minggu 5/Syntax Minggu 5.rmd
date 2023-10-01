@@ -1,0 +1,174 @@
+---
+title: "MPDW P5"
+author: "Farrel Gilbran"
+date: "2023-09-26"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+# Memanggil Library
+library("ggplot2")
+library("tsibble")
+library("tseries")
+library("MASS")
+library("ggplot2")
+library("readxl")
+```
+
+```{r}
+# Membaca Data Excel
+data <- read_excel("Bitcoin Highest Stock Market Price 2022-2023 xlsx.xlsx")
+
+# Mengonversi kolom 'Date' menjadi tipe data Date jika belum
+data$Date <- as.Date(data$Date)
+
+# Memfilter data hanya untuk rentang 1 Juli 2022 hingga 1 Juli 2023
+data <- subset(data, Date >= as.Date("2022-07-01") & Date <= as.Date("2023-06-30"))
+
+#Cek data
+str(data)
+```
+
+```{r}
+#Data time series total
+data.ts <- ts(data$High)
+summary(data.ts)
+```
+
+```{r}
+# Mengecek missing value
+sum(is.na(data))
+```
+
+```{r}
+#Membagi data part 1 dan part 2
+data1<-data.ts[1:310]
+data2 <-data.ts[1:150]
+```
+
+#Data total (1-365)
+##Eksplorasi plot data total
+```{r}
+#Eksplorasi plot data total
+ts.plot(data.ts, main = "Bitcoin Highest Stock Market Price 2022-2023", ylab = "Price",xlab="Time Period" , lwd = 1.5)
+
+```
+### Plot ACF
+
+```{r}
+acf(data.ts)
+```
+
+Berdasarkan plot ACF, terlihat bahwa plot ACF pada data tersebut *tails off*
+
+### Uji ADF
+
+```{r}
+tseries::adf.test(data.ts)
+```
+
+$H_0$ : Data tidak stasioner dalam rataan
+
+$H_1$ : Data stasioner dalam rataan
+
+Berdasarkan uji ADF tersebut, didapat *p-value* sebesar 0.6476 yang lebih besar dari taraf nyata 5% sehingga tak tolak $H_0$ dan menandakan bahwa data tidak stasioner dalam rataan. Hal ini sesuai dengan hasil eksplorasi menggunakan plot time series dan plot ACF.
+
+### Plot Box-Cox
+
+```{r}
+index <- seq(1:365)
+bc = boxcox(data.ts~index, lambda = seq(0,4,by=0.01))
+#Nilai Rounded Lambda
+lambda <- bc$x[which.max(bc$y)]
+lambda
+#SK
+bc$x[bc$y > max(bc$y) - 1/2 * qchisq(.95,1)]
+```
+
+Gambar di atas menunjukkan nilai *rounded value* ($\lambda$) optimum sebesar **1,26** dan pada selang kepercayaan 95% nilai memiliki batas bawah **0,70** dan batas atas **1,80**. Selang tersebut memuat nilai satu sehingga dapat dikatakan bahwa data stasioner dalam ragam.
+
+#Data Part 1 (1-310)
+##Eksplorasi plot data part 1
+```{r}
+ts.plot(data1, main = "Bitcoin Highest Stock Market Price Part 1", ylab = "Price",xlab="Time Period" , lwd = 1.5)
+```
+### Plot ACF
+
+```{r}
+acf(data1)
+```
+
+Berdasarkan plot ACF, terlihat bahwa plot ACF pada data tersebut cenderung *tails off*
+
+### Uji ADF
+
+```{r}
+tseries::adf.test(data1)
+```
+
+$H_0$ : Data tidak stasioner dalam rataan
+
+$H_1$ : Data stasioner dalam rataan
+
+Berdasarkan uji ADF tersebut, didapat *p-value* sebesar 0.8362 yang lebih besar dari taraf nyata 5% sehingga tak tolak $H_0$ dan menandakan bahwa data tidak stasioner dalam rataan. Hal ini sesuai dengan hasil eksplorasi menggunakan plot time series dan plot ACF.
+
+### Plot Box-Cox
+
+```{r}
+index <- seq(1:310)
+bc = boxcox(data1~index, lambda = seq(0,4,by=0.01))
+#Nilai Rounded Lambda
+lambda <- bc$x[which.max(bc$y)]
+lambda
+#SK
+bc$x[bc$y > max(bc$y) - 1/2 * qchisq(.95,1)]
+```
+
+Gambar di atas menunjukkan nilai *rounded value* ($\lambda$) optimum sebesar **0,25** dan pada selang kepercayaan 95% nilai memiliki batas bawah **0,00** dan batas atas **0,89**. Selang tersebut memuat nilai satu sehingga dapat dikatakan bahwa data bangkitan tidak stasioner dalam ragam.
+
+
+#Data Part 2 (1-150)
+##Eksplorasi plot data part 2
+```{r}
+ts.plot(data2, main = "Bitcoin Highest Stock Market Price Part 1", ylab = "Price",xlab="Time Period" , lwd = 1.5)
+```
+
+### Plot ACF
+
+```{r}
+acf(data2)
+```
+
+Berdasarkan plot ACF, terlihat bahwa plot ACF pada data tersebut cenderung *tails off*
+
+### Uji ADF
+
+```{r}
+tseries::adf.test(data2)
+```
+
+$H_0$ : Data tidak stasioner dalam rataan
+
+$H_1$ : Data stasioner dalam rataan
+
+Berdasarkan uji ADF tersebut, didapat *p-value* sebesar 0.3261 yang lebih besar dari taraf nyata 5% sehingga tak tolak $H_0$ dan menandakan bahwa data tidak stasioner dalam rataan. Hal ini sesuai dengan hasil eksplorasi menggunakan plot time series dan plot ACF.
+
+### Plot Box-Cox
+
+```{r}
+index <- seq(1:150)
+bc = boxcox(data2~index, lambda = seq(0,4,by=0.01))
+#Nilai Rounded Lambda
+lambda <- bc$x[which.max(bc$y)]
+lambda
+#SK
+bc$x[bc$y > max(bc$y) - 1/2 * qchisq(.95,1)]
+```
+
+Gambar di atas menunjukkan nilai *rounded value* ($\lambda$) optimum sebesar **0,13** dan pada selang kepercayaan 95% nilai memiliki batas bawah **0,00** dan batas atas **1,30**. Selang tersebut memuat nilai satu sehingga dapat dikatakan bahwa data bangkitan stasioner dalam ragam.
+
+
