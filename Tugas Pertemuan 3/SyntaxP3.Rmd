@@ -1,4 +1,4 @@
-R---
+---
 title: "Tugas MPDW 3"
 author: "Farrel Gilbran"
 date: "2023-09-16"
@@ -39,7 +39,7 @@ test<-datap2[55:72,]
 #data time series
 train.ts<-ts(train)
 test.ts<-ts(test)
-data.ts<-ts(data)
+data.ts<-ts(datap2)
 ```
 
 ```{r}
@@ -48,7 +48,7 @@ train.ts<-ts(train)
 train.ts
 test.ts<-ts(test)
 test.ts
-data.ts<-ts(data)
+data.ts<-ts(datap2)
 data.ts
 ```
 
